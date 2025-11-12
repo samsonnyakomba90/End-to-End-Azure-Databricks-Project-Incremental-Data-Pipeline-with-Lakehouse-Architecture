@@ -1,0 +1,55 @@
+# Upgrade Databricks SDK to the latest version and restart Python to see updated packages
+%pip install --upgrade databricks-sdk==0.70.0
+%restart_python
+
+from databricks.sdk.service.jobs import JobSettings as Job
+
+
+BronzeIngestion = Job.from_dict(
+    {
+        "name": "BronzeIngestion",
+        "tasks": [
+            {
+                "task_key": "bronzeIngestion",
+                "notebook_task": {
+                    "notebook_path": "/Workspace/Users/samsonnyakomba@outlook.com/STREAM PROCESSING/srcParameters",
+                    "base_parameters": {
+                        "outputkey": "",
+                    },
+                    "source": "WORKSPACE",
+                },
+            },
+            {
+                "task_key": "looping_task",
+                "depends_on": [
+                    {
+                        "task_key": "bronzeIngestion",
+                    },
+                ],
+                "for_each_task": {
+                    "inputs": "{{tasks.bronzeIngestion.values.outputkey}}",
+                    "task": {
+                        "task_key": "looping_task_increment",
+                        "notebook_task": {
+                            "notebook_path": "/Workspace/Users/samsonnyakomba@outlook.com/STREAM PROCESSING/incremental",
+                            "base_parameters": {
+                                "filename": "{{input.filename}}",
+                            },
+                            "source": "WORKSPACE",
+                        },
+                    },
+                },
+            },
+        ],
+        "queue": {
+            "enabled": True,
+        },
+        "performance_target": "PERFORMANCE_OPTIMIZED",
+    }
+)
+
+from databricks.sdk import WorkspaceClient
+
+w = WorkspaceClient()
+w.jobs.reset(new_settings=BronzeIngestion, job_id=660680145163171)
+# or create a new job using: w.jobs.create(**BronzeIngestion.as_shallow_dict())

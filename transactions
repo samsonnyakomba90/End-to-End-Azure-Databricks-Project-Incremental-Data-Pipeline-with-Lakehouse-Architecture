@@ -1,0 +1,37 @@
+import dlt
+from pyspark.sql.functions import *
+from pyspark.sql.types import *
+
+# ------TRANSACTIONS ----------------
+@dlt.table(
+    name = 'stg_transactions'
+)
+def stg_transactions():
+    df = spark.read.format("delta")\
+                   .load("/Volumes/streaming/bronze/bronzevolume/transactions/data")
+    return df
+
+# ------ FACTTRANSACTIONS ----------------
+@dlt.table(
+    name = 'fact_transactions'
+)
+# ---------------EXPECTATIONS-----------
+@dlt.expect_all_or_drop({
+    "quantity": "quantity IS NOT NULL AND quantity > 0",
+    "total_price": "total_price IS NOT NULL AND total_price >= 0"
+})
+def fact_transactions():
+    df = spark.readStream.table('stg_transactions')
+    df = df.withColumnRenamed('CustomerID','customer_id')\
+           .withColumnRenamed('ProductID','product_id')\
+           .withColumnRenamed('Quantity','quantity')\
+           .withColumnRenamed('TransactionDate','transaction_date')\
+           .withColumnRenamed('TransactionID','transaction_id')\
+           .withColumnRenamed('TotalValue','total_price')\
+           .withColumnRenamed('Price','price')\
+           .withColumn('transaction_date', col('transaction_date').cast('timestamp'))\
+           .withColumn('quantity', col('quantity').cast('int'))\
+           .withColumn('total_price', col('total_price').cast('double'))\
+           .drop('_rescued_data')\
+           .dropDuplicates()     
+    return df
